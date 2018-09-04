@@ -17,25 +17,24 @@ HEIGHT = 32
 WIDTH = 32
 DEPTH = 3
 NUM_CLASSES = 10
-NUM_DATA_BATCHES = 5
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 10000 * NUM_DATA_BATCHES
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
-RESNET_SIZE = 32
-BATCH_SIZE = 128
-
-# Scale the learning rate linearly with the batch size. When the batch size is
-# 128, the learning rate should be 0.1.
-_INITIAL_LEARNING_RATE = 0.1 * BATCH_SIZE / 128
-_MOMENTUM = 0.9
-
-# We use a weight decay of 0.0002, which performs better than the 0.0001 that
-# was originally suggested.
-_WEIGHT_DECAY = 2e-4
-
-_BATCHES_PER_EPOCH = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / BATCH_SIZE
 
 
 def model_fn(features, labels, mode, params):
+    NUM_DATA_BATCHES = params.get('NUM_DATA_BATCHES')
+    RESNET_SIZE = params.get('RESNET_SIZE')
+    BATCH_SIZE = params.get('BATCH_SIZE')
+    NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 10000 * NUM_DATA_BATCHES
+
+    _MOMENTUM = params.get('MOMENTUM')
+    _WEIGHT_DECAY = params.get("WEIGHT_DECAY")
+
+    _BATCHES_PER_EPOCH = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / \
+        BATCH_SIZE
+    _INITIAL_LEARNING_RATE = params.get(
+        'INITIAL_LEARNING_RATE') * BATCH_SIZE / 128
+
+    _BATCHES_PER_EPOCH = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / BATCH_SIZE
+
     inputs = features[INPUT_TENSOR_NAME]
     tf.summary.image('images', inputs, max_outputs=6)
 
@@ -54,7 +53,9 @@ def model_fn(features, labels, mode, params):
         export_outputs = {
             SIGNATURE_NAME: tf.estimator.export.PredictOutput(predictions)
         }
-        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions, export_outputs=export_outputs)
+        return tf.estimator.EstimatorSpec(mode=mode,
+                                          predictions=predictions,
+                                          export_outputs=export_outputs)
 
     # Calculate loss, which includes softmax cross entropy and L2 regularization.
     cross_entropy = tf.losses.softmax_cross_entropy(
@@ -104,6 +105,7 @@ def model_fn(features, labels, mode, params):
 
     comet_hook = CometSessionHook(
         tensors={'loss': loss, 'accuracy': accuracy[1]},
+        parameters=params,
         every_n_iter=None,
         every_n_secs=5)
 
@@ -123,22 +125,26 @@ def serving_input_fn(params):
 
 def train_input_fn(training_dir, params):
     return _input_from_files(tf.estimator.ModeKeys.TRAIN,
-                             batch_size=BATCH_SIZE, data_dir=training_dir)
+                             num_data_batches=params.get('NUM_DATA_BATCHES'),
+                             batch_size=params.get('BATCH_SIZE'),
+                             data_dir=training_dir)
 
 
 def eval_input_fn(training_dir, params):
     return _input_from_files(tf.estimator.ModeKeys.EVAL,
-                             batch_size=BATCH_SIZE, data_dir=training_dir)
+                             num_data_batches=params.get('NUM_DATA_BATCHES'),
+                             batch_size=params.get('BATCH_SIZE'),
+                             data_dir=training_dir)
 
 
-def _input_from_files(mode, batch_size, data_dir):
+def _input_from_files(mode, num_data_batches, batch_size, data_dir):
     """Uses the contrib.data input pipeline for CIFAR-10 dataset.
 
   Args:
     mode: Standard names for model modes (tf.estimators.ModeKeys).
     batch_size: The number of samples per batch of input requested.
   """
-    dataset = _record_dataset(_filenames(mode, data_dir))
+    dataset = _record_dataset(_filenames(mode, num_data_batches, data_dir))
 
     # For training repeat forever.
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -154,7 +160,7 @@ def _input_from_files(mode, batch_size, data_dir):
 
         # Ensure that the capacity is sufficiently large to provide good random
         # shuffling.
-        buffer_size = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
+        buffer_size = int(10000 * num_data_batches *
                           0.4) + 3 * batch_size
         dataset = dataset.shuffle(buffer_size=buffer_size)
 
@@ -220,7 +226,7 @@ def _record_dataset(filenames):
     return tf.data.FixedLengthRecordDataset(filenames, record_bytes)
 
 
-def _filenames(mode, data_dir):
+def _filenames(mode, num_data_batches, data_dir):
     """Returns a list of filenames based on 'mode'."""
     data_dir = os.path.join(data_dir, 'cifar-10-batches-bin')
 
@@ -230,7 +236,7 @@ def _filenames(mode, data_dir):
     if mode == tf.estimator.ModeKeys.TRAIN:
         return [
             os.path.join(data_dir, 'data_batch_%d.bin' % i)
-            for i in range(1, NUM_DATA_BATCHES + 1)
+            for i in range(1, num_data_batches + 1)
         ]
     elif mode == tf.estimator.ModeKeys.EVAL:
         return [os.path.join(data_dir, 'test_batch.bin')]
