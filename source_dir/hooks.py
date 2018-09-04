@@ -129,10 +129,6 @@ class NeverTriggerTimer(_HookTimer):
         return None
 
 
-''' Adapted tf.train.LogTrainerHook to work with Comet
-'''
-
-
 class CometSessionHook(tf.train.SessionRunHook):
 
     def __init__(self,
@@ -142,6 +138,27 @@ class CometSessionHook(tf.train.SessionRunHook):
                  every_n_secs=None,
                  at_end=False,
                  formatter=None):
+        """Adapted tf.train.LoggingTensorHook to work with Comet
+
+        Args:
+            tensors: `dict` that maps string-valued tags to tensors/tensor names,
+                or `iterable` of tensors/tensor names.
+            parameters: `dict` that maps string=valued tags to real-valued
+                hyperparameters
+            every_n_iter: `int`, print the values of `tensors` once every N local
+                steps taken on the current worker.
+            every_n_secs: `int` or `float`, print the values of `tensors` once
+                every N seconds. Exactly one of `every_n_iter` and `every_n_secs`
+                should be provided.
+            at_end: `bool` specifying whether to print the values of `tensors` at the
+                end of the run.
+            formatter: function, takes dict of `tag`->`Tensor` and returns
+            a string. If `None` uses default printing all tensors.
+
+        Raises:
+            ValueError: if `every_n_iter` is non-positive.
+
+        """
         self.parameters = parameters
 
         only_log_at_end = (
