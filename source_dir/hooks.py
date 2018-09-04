@@ -137,10 +137,12 @@ class CometSessionHook(tf.train.SessionRunHook):
 
     def __init__(self,
                  tensors,
+                 parameters,
                  every_n_iter=1,
                  every_n_secs=None,
                  at_end=False,
                  formatter=None):
+        self.parameters = parameters
 
         only_log_at_end = (
             at_end and (every_n_iter is None) and (every_n_secs is None))
@@ -173,6 +175,7 @@ class CometSessionHook(tf.train.SessionRunHook):
             api_key="<COMET API KEY>",
             project_name="comet-sagemaker",
             workspace="<workspace>")
+        self.experiment.log_multiple_params(self.parameters)
 
         self._timer.reset()
         self._iter_count = 0
