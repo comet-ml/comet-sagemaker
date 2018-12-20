@@ -12,6 +12,21 @@ git clone https://github.com/comet-ml/comet-sagemaker; cd comet-sagemaker
 python main.py
 ```
 
+#### Project Structure
+```
+.
+├── README.md
+├── main.py 
+├── source_dir
+│   ├── __init__.py
+│   ├── hooks.py
+│   ├── requirements.txt
+│   ├── resnet_cifar_10.py
+│   └── resnet_model.py
+└── utils.py
+
+```
+
 #### Hyperparameters
 
 Hyperparameters for this experiment include,
