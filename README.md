@@ -25,5 +25,5 @@ size % 6 = 2
 
 **Initial Learning Rate**: Initial learning rate for the optimizer  
 **Weight Decay**: Regularization parameter that is applied to the loss in order to penalize large weights.  
-**Batch Size**: The size of an individual batch of training examples
+**Batch Size**: The size of an individual batch of training examples  
 **Number of Data Batches**: Number of training batches to process  
