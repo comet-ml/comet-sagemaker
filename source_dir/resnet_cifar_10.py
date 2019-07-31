@@ -2,11 +2,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from hooks import CometSessionHook
+
 import os
 import tensorflow as tf
 import resnet_model
-
-from hooks import CometSessionHook
 
 tf.enable_eager_execution()
 
