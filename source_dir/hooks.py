@@ -192,7 +192,7 @@ class CometSessionHook(tf.train.SessionRunHook):
             api_key="<COMET API KEY>",
             project_name="comet-sagemaker",
             workspace="<workspace>")
-        self.experiment.log_multiple_params(self.parameters)
+        self.experiment.log_parameters(self.parameters)
 
         self._timer.reset()
         self._iter_count = 0
@@ -215,7 +215,7 @@ class CometSessionHook(tf.train.SessionRunHook):
             return None
 
     def _log_tensors(self, tensor_values):
-        self.experiment.log_multiple_metrics(tensor_values)
+        self.experiment.log_metrics(tensor_values)
 
         # log comet metrics
         original = np.get_printoptions()
