@@ -1,8 +1,8 @@
 import os
-import sagemaker
-from sagemaker import get_execution_role
 import utils
+import sagemaker
 
+from sagemaker import get_execution_role
 from sagemaker.tensorflow import TensorFlow
 
 
@@ -12,7 +12,7 @@ def main():
 
     utils.cifar10_download()
     inputs = sagemaker_session.upload_data(
-        path='/tmp/cifar10_data', key_prefix='data/DEMO-cifar10')
+        path='./cifar10_data', key_prefix='data/DEMO-cifar10')
 
     source_dir = os.path.join(os.getcwd(), 'source_dir')
     hyperparameters = {
@@ -25,17 +25,19 @@ def main():
         'NUM_DATA_BATCHES': 5
     }
 
-    estimator = TensorFlow(entry_point='resnet_cifar_10.py',
-                           source_dir=source_dir,
-                           role=role,
-                           hyperparameters=hyperparameters,
-                           requirements_file='requirements.txt',
-                           framework_version='1.9',
-                           training_steps=100,
-                           evaluation_steps=5,
-                           train_instance_count=1,
-                           train_instance_type='ml.c4.xlarge',
-                           base_job_name='tensorboard-example')
+    estimator = TensorFlow(
+        entry_point='model.py',
+        source_dir=source_dir,
+        role=role,
+        hyperparameters=hyperparameters,
+        requirements_file='requirements.txt',
+        training_steps=100,
+        evaluation_steps=5,
+        train_instance_count=1,
+        framework_version='1.12',
+        py_version='py3',
+        train_instance_type='ml.c4.xlarge',
+        base_job_name='comet-sagemaker')
 
     estimator.fit(inputs)
 

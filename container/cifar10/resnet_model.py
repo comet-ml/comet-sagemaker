@@ -1,17 +1,19 @@
-# Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+# Copyright 2017-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Licensed under the Apache License, Version 2.0 (the "License"). You
+# may not use this file except in compliance with the License. A copy of
+# the License is located at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#     http://aws.amazon.com/apache2.0/
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+# or in the "license" file accompanying this file. This file is
+# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+# ANY KIND, either express or implied. See the License for the specific
+# language governing permissions and limitations under the License.
+
+# A sample training component that trains a simple scikit-learn decision tree model.
+# This implementation works in File mode and makes no assumptions about the input file names.
+# Input is specified as CSV with a data point in each row and the labels in the first column.
 """Contains definitions for the preactivation form of Residual Networks.
 
 Residual networks (ResNets) were originally proposed in:
@@ -27,10 +29,10 @@ The key difference of the full preactivation 'v2' variant compared to the
 'v1' variant in [1] is the use of batch normalization before every weight layer
 rather than after.
 """
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
 import tensorflow as tf
 
 _BATCH_NORM_DECAY = 0.997
@@ -276,91 +278,3 @@ def cifar10_resnet_v2_generator(resnet_size, num_classes, data_format=None):
 
     model.default_image_size = 32
     return model
-
-
-def imagenet_resnet_v2_generator(block_fn, layers, num_classes,
-                                 data_format=None):
-    """Generator for ImageNet ResNet v2 models.
-
-  Args:
-    block_fn: The block to use within the model, either `building_block` or
-      `bottleneck_block`.
-    layers: A length-4 array denoting the number of blocks to include in each
-      layer. Each layer consists of blocks that take inputs of the same size.
-    num_classes: The number of possible classes for image classification.
-    data_format: The input format ('channels_last', 'channels_first', or None).
-      If set to None, the format is dependent on whether a GPU is available.
-
-  Returns:
-    The model function that takes in `inputs` and `is_training` and
-    returns the output tensor of the ResNet model.
-  """
-    if data_format is None:
-        data_format = (
-            'channels_first' if tf.test.is_built_with_cuda() else 'channels_last')
-
-    def model(inputs, is_training):
-        """Constructs the ResNet model given the inputs."""
-        if data_format == 'channels_first':
-            # Convert from channels_last (NHWC) to channels_first (NCHW). This
-            # provides a large performance boost on GPU.
-            inputs = tf.transpose(inputs, [0, 3, 1, 2])
-
-        inputs = conv2d_fixed_padding(
-            inputs=inputs, filters=64, kernel_size=7, strides=2,
-            data_format=data_format)
-        inputs = tf.identity(inputs, 'initial_conv')
-        inputs = tf.layers.max_pooling2d(
-            inputs=inputs, pool_size=3, strides=2, padding='SAME',
-            data_format=data_format)
-        inputs = tf.identity(inputs, 'initial_max_pool')
-
-        inputs = block_layer(
-            inputs=inputs, filters=64, block_fn=block_fn, blocks=layers[0],
-            strides=1, is_training=is_training, name='block_layer1',
-            data_format=data_format)
-        inputs = block_layer(
-            inputs=inputs, filters=128, block_fn=block_fn, blocks=layers[1],
-            strides=2, is_training=is_training, name='block_layer2',
-            data_format=data_format)
-        inputs = block_layer(
-            inputs=inputs, filters=256, block_fn=block_fn, blocks=layers[2],
-            strides=2, is_training=is_training, name='block_layer3',
-            data_format=data_format)
-        inputs = block_layer(
-            inputs=inputs, filters=512, block_fn=block_fn, blocks=layers[3],
-            strides=2, is_training=is_training, name='block_layer4',
-            data_format=data_format)
-
-        inputs = batch_norm_relu(inputs, is_training, data_format)
-        inputs = tf.layers.average_pooling2d(
-            inputs=inputs, pool_size=7, strides=1, padding='VALID',
-            data_format=data_format)
-        inputs = tf.identity(inputs, 'final_avg_pool')
-        inputs = tf.reshape(inputs,
-                            [-1, 512 if block_fn is building_block else 2048])
-        inputs = tf.layers.dense(inputs=inputs, units=num_classes)
-        inputs = tf.identity(inputs, 'final_dense')
-        return inputs
-
-    model.default_image_size = 224
-    return model
-
-
-def resnet_v2(resnet_size, num_classes, data_format=None):
-    """Returns the ResNet model for a given size and number of output classes."""
-    model_params = {
-        18: {'block': building_block, 'layers': [2, 2, 2, 2]},
-        34: {'block': building_block, 'layers': [3, 4, 6, 3]},
-        50: {'block': bottleneck_block, 'layers': [3, 4, 6, 3]},
-        101: {'block': bottleneck_block, 'layers': [3, 4, 23, 3]},
-        152: {'block': bottleneck_block, 'layers': [3, 8, 36, 3]},
-        200: {'block': bottleneck_block, 'layers': [3, 24, 36, 3]}
-    }
-
-    if resnet_size not in model_params:
-        raise ValueError('Not a valid resnet_size:', resnet_size)
-
-    params = model_params[resnet_size]
-    return imagenet_resnet_v2_generator(
-        params['block'], params['layers'], num_classes, data_format)
