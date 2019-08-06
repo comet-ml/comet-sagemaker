@@ -96,9 +96,6 @@ def model_fn(features, labels, mode):
     # Add weight decay to the loss.
     loss = cross_entropy + _WEIGHT_DECAY * tf.add_n(
         [tf.nn.l2_loss(v) for v in tf.trainable_variables()])
-    accuracy = tf.metrics.accuracy(
-        tf.argmax(labels, axis=1), predictions['classes'])
-    metrics = {'accuracy': accuracy}
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         global_step = tf.train.get_or_create_global_step()
@@ -112,10 +109,6 @@ def model_fn(features, labels, mode):
         # Create a tensor named learning_rate for logging purposes
         tf.identity(learning_rate, name='learning_rate')
         tf.summary.scalar('learning_rate', learning_rate)
-
-        # Create a tensor named train_accuracy for logging purposes
-        tf.identity(accuracy[1], name='train_accuracy')
-        tf.summary.scalar('train_accuracy', accuracy[1])
 
         optimizer = tf.train.MomentumOptimizer(
             learning_rate=learning_rate,
@@ -132,7 +125,6 @@ def model_fn(features, labels, mode):
         mode=mode,
         predictions=predictions,
         loss=loss,
-        eval_metric_ops=metrics,
         train_op=train_op)
 
 
