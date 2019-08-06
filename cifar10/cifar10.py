@@ -47,7 +47,7 @@ _MOMENTUM = 0.9
 _WEIGHT_DECAY = 2e-4
 
 _BATCHES_PER_EPOCH = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / BATCH_SIZE
-experiment = Experiment(project_name="comet-sagemaker", workspace="cometpublic")
+experiment = Experiment(project_name="comet-sagemaker")
 experiment_parameters = {
     'RESNET_SIZE': RESNET_SIZE,
     'BATCH_SIZE': BATCH_SIZE,
