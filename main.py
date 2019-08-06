@@ -1,44 +1,49 @@
-import os
-import utils
-import sagemaker
+import argparse
+import boto3
 
+import sagemaker
 from sagemaker import get_execution_role
-from sagemaker.tensorflow import TensorFlow
+from sagemaker.estimator import Estimator
+
+DATASET_PREFIX = 'DEMO-comet-sagemaker-cifar10-example'
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data')
+    parser.add_argument('--container_name')
+
+    return parser.parse_args()
 
 
 def main():
-    sagemaker_session = sagemaker.Session()
+    args = get_args()
+
+    sess = sagemaker.Session()
     role = get_execution_role()
 
-    utils.cifar10_download()
-    inputs = sagemaker_session.upload_data(
-        path='./cifar10_data', key_prefix='data/DEMO-cifar10')
+    client = boto3.client('sts')
+    account = client.get_caller_identity()['Account']
 
-    source_dir = os.path.join(os.getcwd(), 'source_dir')
+    my_session = boto3.session.Session()
+    region = my_session.region_name
+
+    container_name = args.container_name
+    ecr_image = '{}.dkr.ecr.{}.amazonaws.com/{}:latest'.format(
+        account, region, container_name)
+
+    inputs = sess.upload_data(
+        path=args.data, key_prefix=DATASET_PREFIX)
+
     hyperparameters = {
-        'throttle_secs': 30,
-        'MOMENTUM': 0.9,
-        'RESNET_SIZE': 32,
-        'INITIAL_LEARNING_RATE': 0.05,
-        'WEIGHT_DECAY': 2e-4,
-        'BATCH_SIZE': 32,
-        'NUM_DATA_BATCHES': 5
+        'train-steps': 1000
     }
-
-    estimator = TensorFlow(
-        entry_point='model.py',
-        source_dir=source_dir,
-        role=role,
-        hyperparameters=hyperparameters,
-        requirements_file='requirements.txt',
-        training_steps=100,
-        evaluation_steps=5,
-        train_instance_count=1,
-        framework_version='1.12',
-        py_version='py3',
-        train_instance_type='ml.c4.xlarge',
-        base_job_name='comet-sagemaker')
-
+    instance_type = 'ml.m4.xlarge'
+    estimator = Estimator(role=role,
+                          hyperparameters=hyperparameters,
+                          train_instance_count=1,
+                          train_instance_type=instance_type,
+                          image_name=ecr_image)
     estimator.fit(inputs)
 
 

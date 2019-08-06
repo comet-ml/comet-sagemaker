@@ -24,8 +24,6 @@ import tensorflow as tf
 
 import resnet_model
 
-experiment = Experiment(api_key='YOUR API KEY', project_name='comet-sagemaker')
-
 INPUT_TENSOR_NAME = "inputs"
 SIGNATURE_NAME = "serving_default"
 
@@ -49,9 +47,20 @@ _MOMENTUM = 0.9
 _WEIGHT_DECAY = 2e-4
 
 _BATCHES_PER_EPOCH = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / BATCH_SIZE
+experiment = Experiment(project_name="comet-sagemaker", workspace="cometpublic")
+experiment_parameters = {
+    'RESNET_SIZE': RESNET_SIZE,
+    'BATCH_SIZE': BATCH_SIZE,
+    'MOMENTUM': _MOMENTUM,
+    'WEIGHT_DECAY': _WEIGHT_DECAY,
+    'INITIAl_LEARNING_RATE': _INITIAL_LEARNING_RATE,
+    'BATCHES_PER_EPOCH': _BATCHES_PER_EPOCH,
+    'NUM_DATA_BATCHES': NUM_DATA_BATCHES
+}
+experiment.log_parameters(experiment_parameters)
 
 
-def model_fn(features, labels, mode, params):
+def model_fn(features, labels, mode):
     """
     Model function for CIFAR-10.
     For more information: https://www.tensorflow.org/guide/custom_estimators#write_a_model_function
@@ -59,8 +68,7 @@ def model_fn(features, labels, mode, params):
     inputs = features[INPUT_TENSOR_NAME]
     tf.summary.image('images', inputs, max_outputs=6)
 
-    network = resnet_model.cifar10_resnet_v2_generator(
-        params.get('resnet_size'), NUM_CLASSES)
+    network = resnet_model.cifar10_resnet_v2_generator(RESNET_SIZE, NUM_CLASSES)
 
     inputs = tf.reshape(inputs, [-1, HEIGHT, WIDTH, DEPTH])
 
@@ -86,17 +94,18 @@ def model_fn(features, labels, mode, params):
     tf.summary.scalar('cross_entropy', cross_entropy)
 
     # Add weight decay to the loss.
-    loss = cross_entropy + params.get('weight_decay') * tf.add_n(
+    loss = cross_entropy + _WEIGHT_DECAY * tf.add_n(
         [tf.nn.l2_loss(v) for v in tf.trainable_variables()])
+    accuracy = tf.metrics.accuracy(
+        tf.argmax(labels, axis=1), predictions['classes'])
+    metrics = {'accuracy': accuracy}
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         global_step = tf.train.get_or_create_global_step()
 
         # Multiply the learning rate by 0.1 at 100, 150, and 200 epochs.
-        boundaries = [int(_BATCHES_PER_EPOCH * epoch)
-                      for epoch in [100, 150, 200]]
-        values = [params.get('initial_learning_rate') *
-                  decay for decay in [1, 0.1, 0.01, 0.001]]
+        boundaries = [int(_BATCHES_PER_EPOCH * epoch) for epoch in [100, 150, 200]]
+        values = [_INITIAL_LEARNING_RATE * decay for decay in [1, 0.1, 0.01, 0.001]]
         learning_rate = tf.train.piecewise_constant(
             tf.cast(global_step, tf.int32), boundaries, values)
 
@@ -104,9 +113,13 @@ def model_fn(features, labels, mode, params):
         tf.identity(learning_rate, name='learning_rate')
         tf.summary.scalar('learning_rate', learning_rate)
 
+        # Create a tensor named train_accuracy for logging purposes
+        tf.identity(accuracy[1], name='train_accuracy')
+        tf.summary.scalar('train_accuracy', accuracy[1])
+
         optimizer = tf.train.MomentumOptimizer(
             learning_rate=learning_rate,
-            momentum=params.get('momentum'))
+            momentum=_MOMENTUM)
 
         # Batch norm requires update ops to be added as a dependency to the train_op
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -119,6 +132,7 @@ def model_fn(features, labels, mode, params):
         mode=mode,
         predictions=predictions,
         loss=loss,
+        eval_metric_ops=metrics,
         train_op=train_op)
 
 
@@ -159,26 +173,23 @@ def parser(serialized_example):
     image = tf.decode_raw(features['image'], tf.uint8)
     image.set_shape([DEPTH * HEIGHT * WIDTH])
 
-    image = tf.cast(tf.transpose(tf.reshape(
-        image, [DEPTH, HEIGHT, WIDTH]), [1, 2, 0]), tf.float32)
+    image = tf.cast(tf.transpose(tf.reshape(image, [DEPTH, HEIGHT, WIDTH]), [1, 2, 0]), tf.float32)
     label = tf.cast(features['label'], tf.int32)
 
     return image, label
 
 
-def train_input_fn(data_dir, params):
+def train_input_fn(data_dir):
     with tf.device('/cpu:0'):
         train_data = os.path.join(data_dir, 'train.tfrecords')
-        image_batch, label_batch = make_batch(
-            train_data, params.get('batch_size'))
+        image_batch, label_batch = make_batch(train_data, BATCH_SIZE)
         return {INPUT_TENSOR_NAME: image_batch}, label_batch
 
 
-def eval_input_fn(data_dir, params):
+def eval_input_fn(data_dir):
     with tf.device('/cpu:0'):
         eval_data = os.path.join(data_dir, 'eval.tfrecords')
-        image_batch, label_batch = make_batch(
-            eval_data, params.get('batch_size'))
+        image_batch, label_batch = make_batch(eval_data, BATCH_SIZE)
 
         return {INPUT_TENSOR_NAME: image_batch}, label_batch
 
@@ -190,14 +201,11 @@ def train(model_dir, data_dir, train_steps):
 
     train_spec = tf.estimator.TrainSpec(temp_input_fn, max_steps=train_steps)
 
-    exporter = tf.estimator.LatestExporter(
-        'Servo', serving_input_receiver_fn=serving_input_fn)
+    exporter = tf.estimator.LatestExporter('Servo', serving_input_receiver_fn=serving_input_fn)
     temp_eval_fn = functools.partial(eval_input_fn, data_dir)
-    eval_spec = tf.estimator.EvalSpec(
-        temp_eval_fn, steps=1, exporters=exporter)
+    eval_spec = tf.estimator.EvalSpec(temp_eval_fn, steps=1, exporters=exporter)
 
-    tf.estimator.train_and_evaluate(
-        estimator=estimator, train_spec=train_spec, eval_spec=eval_spec)
+    tf.estimator.train_and_evaluate(estimator=estimator, train_spec=train_spec, eval_spec=eval_spec)
 
 
 def main(model_dir, data_dir, train_steps):
@@ -234,3 +242,4 @@ if __name__ == '__main__':
         help='The number of steps to use for training.')
     args = args_parser.parse_args()
     main(**vars(args))
+
